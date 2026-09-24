@@ -344,12 +344,19 @@ function Editor({
     applyToScore();
     const merged = getExport();
     merged.warnings.forEach((w) => toast.warning(w));
-    const next = merged.xml;
-    const blob = new Blob([next], { type: "application/vnd.recordare.musicxml+xml" });
+    let next = merged.xml.replace(/^\s*<\?xml[^>]*\?>\s*/, "");
+    if (!/<!DOCTYPE/i.test(next)) {
+      next =
+        '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n' +
+        next;
+    }
+    next = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + next;
+    const blob = new Blob([next], { type: "application/xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename.replace(/\.pdf$/i, "") + ".musicxml";
+    a.download =
+      filename.replace(/\.(pdf|musicxml|xml)$/i, "").replace(/[^\w\- ]+/g, "").trim() + ".xml";
     a.click();
     URL.revokeObjectURL(url);
   }
