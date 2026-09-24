@@ -14,45 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      scores: {
-        Row: {
-          created_at: string
-          edited_musicxml: string | null
-          filename: string
-          id: string
-          original_musicxml: string
-          page_count: number
-          page_images: string[]
-          page_xml: string[]
-          updated_at: string
-          warnings: string | null
-        }
-        Insert: {
-          created_at?: string
-          edited_musicxml?: string | null
-          filename: string
-          id?: string
-          original_musicxml: string
-          page_count?: number
-          page_images?: string[]
-          page_xml?: string[]
-          updated_at?: string
-          warnings?: string | null
-        }
-        Update: {
-          created_at?: string
-          edited_musicxml?: string | null
-          filename?: string
-          id?: string
-          original_musicxml?: string
-          page_count?: number
-          page_images?: string[]
-          page_xml?: string[]
-          updated_at?: string
-          warnings?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
