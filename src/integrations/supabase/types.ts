@@ -30,9 +30,9 @@ export type Database = {
         Insert: {
           created_at?: string
           edited_musicxml?: string | null
-          filename: string
+          filename?: string
           id?: string
-          original_musicxml: string
+          original_musicxml?: string
           page_count?: number
           page_images?: string[]
           page_xml?: string[]
