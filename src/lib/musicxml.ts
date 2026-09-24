@@ -8,6 +8,13 @@ export type Syllable = {
   syllabic: string;
 };
 
+export type ScoreDetails = {
+  swahiliTitle: string;
+  englishTitle: string;
+  arranger: string;
+  details: string;
+};
+
 export function parseXml(xml: string): Document {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.getElementsByTagName("parsererror").length > 0) {
@@ -64,6 +71,66 @@ export function applySyllables(doc: Document, syllables: Syllable[]): Document {
       });
     });
   });
+  return doc;
+}
+
+function directChild(parent: Element, tagName: string): Element | undefined {
+  return Array.from(parent.children).find((child) => child.tagName === tagName);
+}
+
+function ensureChild(doc: Document, parent: Element, tagName: string): Element {
+  const existing = directChild(parent, tagName);
+  if (existing) return existing;
+  const element = doc.createElement(tagName);
+  parent.appendChild(element);
+  return element;
+}
+
+export function collectScoreDetails(doc: Document): ScoreDetails {
+  const root = doc.documentElement;
+  const identification = directChild(root, "identification");
+  const creators = identification
+    ? Array.from(identification.children).filter((child) => child.tagName === "creator")
+    : [];
+  const arranger = creators.find((creator) => creator.getAttribute("type") === "arranger");
+  const miscellaneous = identification ? directChild(identification, "miscellaneous") : undefined;
+  const details = miscellaneous
+    ? Array.from(miscellaneous.children).find(
+        (child) => child.tagName === "miscellaneous-field" && child.getAttribute("name") === "details",
+      )
+    : undefined;
+  return {
+    swahiliTitle: directChild(ensureChild(doc, root, "work"), "work-title")?.textContent?.trim() || "Usiku Mtakatifu",
+    englishTitle: directChild(root, "movement-title")?.textContent?.trim() || "O Holy Night",
+    arranger: arranger?.textContent?.trim() || "",
+    details: details?.textContent?.trim() || "",
+  };
+}
+
+export function applyScoreDetails(doc: Document, details: ScoreDetails): Document {
+  const root = doc.documentElement;
+  ensureChild(doc, ensureChild(doc, root, "work"), "work-title").textContent = details.swahiliTitle;
+  ensureChild(doc, root, "movement-title").textContent = details.englishTitle;
+  const identification = ensureChild(doc, root, "identification");
+  let arranger = Array.from(identification.children).find(
+    (child) => child.tagName === "creator" && child.getAttribute("type") === "arranger",
+  );
+  if (!arranger) {
+    arranger = doc.createElement("creator");
+    arranger.setAttribute("type", "arranger");
+    identification.appendChild(arranger);
+  }
+  arranger.textContent = details.arranger;
+  const miscellaneous = ensureChild(doc, identification, "miscellaneous");
+  let detailField = Array.from(miscellaneous.children).find(
+    (child) => child.tagName === "miscellaneous-field" && child.getAttribute("name") === "details",
+  );
+  if (!detailField) {
+    detailField = doc.createElement("miscellaneous-field");
+    detailField.setAttribute("name", "details");
+    miscellaneous.appendChild(detailField);
+  }
+  detailField.textContent = details.details;
   return doc;
 }
 

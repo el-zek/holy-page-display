@@ -192,6 +192,19 @@
   opacity: 1;
 }
 
+.score-title-editor input,
+.score-title-editor textarea {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.score-title-editor input:hover,
+.score-title-editor textarea:hover,
+.score-title-editor input:focus,
+.score-title-editor textarea:focus {
+  border-color: var(--color-border);
+}
+
 @media print {
   body * {
     visibility: hidden;
