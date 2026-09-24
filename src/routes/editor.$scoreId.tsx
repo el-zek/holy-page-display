@@ -235,6 +235,10 @@ function Editor({
   const warnings = useMemo(() => scoreWarnings(doc), [doc]);
 
   const container = useRef<HTMLDivElement>(null);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const lyricNodes = useRef<SVGElement[]>([]);
+  const openInlineRef = useRef<(i: number) => void>(() => {});
+  const [inlinePos, setInlinePos] = useState<{ left: number; top: number; width: number } | null>(null);
   const osmd = useRef<import("opensheetmusicdisplay").OpenSheetMusicDisplay | null>(null);
 
   useEffect(() => {
@@ -273,9 +277,11 @@ function Editor({
               .flat()
               .flatMap((measure) => measure?.staffEntries ?? [])
               .flatMap((entry) => entry.LyricsEntries ?? []);
+            lyricNodes.current = [];
             lyricEntries.forEach((entry, index) => {
               const node = entry.GraphicalLabel?.SVGNode as SVGElement | undefined;
               if (!node) return;
+              lyricNodes.current[index] = node;
               node.classList.add("editable-score-lyric");
               const textNode = node.querySelector("text");
               if (textNode && !(textNode.textContent ?? "").replace(/\u200b/g, "").trim()) {
@@ -285,7 +291,7 @@ function Editor({
               node.setAttribute("role", "button");
               node.setAttribute("tabindex", "0");
               node.setAttribute("aria-label", `Edit lyric ${index + 1}`);
-              const select = () => setActiveSyllable(index);
+              const select = () => openInlineRef.current(index);
               node.addEventListener("click", select);
               node.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" || event.key === " ") select();
@@ -302,6 +308,21 @@ function Editor({
     };
   }, [currentXml]);
 
+  function openInline(index: number) {
+    const node = lyricNodes.current[index];
+    const wrap = wrapper.current;
+    if (!node || !wrap) return;
+    const r = node.getBoundingClientRect();
+    const w = wrap.getBoundingClientRect();
+    const width = Math.max(r.width + 24, 64);
+    setInlinePos({
+      left: r.left - w.left + wrap.scrollLeft + r.width / 2 - width / 2,
+      top: r.top - w.top + wrap.scrollTop + r.height / 2 - 14,
+      width,
+    });
+    setActiveSyllable(index);
+  }
+
   function updateSyllable(index: number, text: string) {
     setSyllables((prev) => {
       const next = prev.map((s, i) => (i === index ? { ...s, text } : s));
@@ -310,6 +331,8 @@ function Editor({
       onDraft(serializeXml(d));
       return next;
     });
+    const t = lyricNodes.current[index]?.querySelector("text");
+    if (t) t.textContent = text || "lyrics";
     setDirty(true);
   }
 
@@ -405,27 +428,32 @@ function Editor({
 
 
       <div className="mx-auto mt-6 max-w-6xl">
-        <div className="mb-3 flex min-h-12 items-center gap-3 border-y bg-card px-3 py-2">
-          {activeSyllable === null ? (
-            <p className="text-sm text-muted-foreground">Select any lyric beneath a note to edit it.</p>
-          ) : (
-            <>
-              <span className="text-xs uppercase tracking-widest text-muted-foreground">
-                {syllables[activeSyllable]?.partName} · measure {syllables[activeSyllable]?.measure}
-              </span>
-              <input
-                autoFocus
-                value={syllables[activeSyllable]?.text ?? ""}
-                aria-label="Selected lyric"
-                onChange={(event) => updateSyllable(activeSyllable, event.target.value)}
-                className="h-9 min-w-32 border-b bg-transparent px-2 text-center text-base outline-none focus:border-primary"
-              />
-              <Button size="sm" variant="outline" onClick={applyToScore}>Apply to score</Button>
-            </>
-          )}
-        </div>
-        <div id="score-print" className="score-sheet score-pages overflow-x-auto p-2 sm:p-4">
+        <p className="mb-3 text-sm text-muted-foreground">
+          Bofya lyric yoyote chini ya noti uiandike hapo hapo. Enter/Tab huenda lyric inayofuata. Ukimaliza bofya Save.
+        </p>
+        <div id="score-print" ref={wrapper} className="score-sheet score-pages relative overflow-x-auto p-2 sm:p-4">
           <div ref={container} />
+          {activeSyllable !== null && inlinePos && (
+            <input
+              key={activeSyllable}
+              autoFocus
+              value={syllables[activeSyllable]?.text ?? ""}
+              aria-label="Edit lyric"
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(event) => updateSyllable(activeSyllable, event.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  const n = activeSyllable + (e.shiftKey ? -1 : 1);
+                  if (n >= 0 && n < lyricNodes.current.length) openInline(n);
+                  else setActiveSyllable(null);
+                } else if (e.key === "Escape") setActiveSyllable(null);
+              }}
+              onBlur={() => setTimeout(() => setActiveSyllable((a) => (a === activeSyllable ? null : a)), 150)}
+              style={{ left: inlinePos.left, top: inlinePos.top, width: inlinePos.width }}
+              className="absolute z-10 h-7 border border-primary bg-background px-1 text-center text-sm shadow-md outline-none"
+            />
+          )}
         </div>
       </div>
     </main>
