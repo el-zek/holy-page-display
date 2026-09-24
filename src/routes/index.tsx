@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
 
 const MAX_PAGES = 8;
 const MAX_BYTES = 20 * 1024 * 1024;
-const O_HOLY_NIGHT_TEMPLATE_ID = "e9b512e5-8603-4428-8586-8812fe5da247";
+const O_HOLY_NIGHT_TEMPLATE_ID = "5a1e0000-0000-4000-8000-000000000001";
 
 const STEPS = [
   "Reading your PDF",
