@@ -4,11 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   applySyllables,
+  applyScoreDetails,
+  collectScoreDetails,
   collectSyllables,
   parseXml,
   scoreWarnings,
   serializeXml,
   type Syllable,
+  type ScoreDetails,
 } from "@/lib/musicxml";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -227,6 +230,7 @@ function Editor({
 }) {
   const doc = useMemo(() => parseXml(xml), [xml]);
   const [syllables, setSyllables] = useState<Syllable[]>(() => collectSyllables(doc));
+  const [scoreDetails, setScoreDetails] = useState<ScoreDetails>(() => collectScoreDetails(doc));
   const [currentXml, setCurrentXml] = useState(xml);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -250,7 +254,7 @@ function Editor({
         osmd.current = new OpenSheetMusicDisplay(container.current, {
           autoResize: false,
           backend: "svg",
-          drawTitle: true,
+          drawTitle: false,
           pageFormat: "Endless",
           newSystemFromXML: true,
           newSystemFromNewPageInXML: true,
@@ -340,7 +344,13 @@ function Editor({
   function buildXml(): string {
     const next = parseXml(currentXml);
     applySyllables(next, syllables);
+    applyScoreDetails(next, scoreDetails);
     return serializeXml(next);
+  }
+
+  function updateScoreDetails(field: keyof ScoreDetails, value: string) {
+    setScoreDetails((previous) => ({ ...previous, [field]: value }));
+    setDirty(true);
   }
 
   function applyToScore() {
@@ -433,6 +443,39 @@ function Editor({
           Bofya lyric yoyote chini ya noti uiandike hapo hapo. Enter/Tab huenda lyric inayofuata. Ukimaliza bofya Save.
         </p>
         <div id="score-print" ref={wrapper} className="score-sheet score-pages relative overflow-x-auto p-2 sm:p-4">
+          <section className="score-title-editor mx-auto max-w-3xl px-8 pb-5 pt-7 text-center">
+            <input
+              aria-label="Kichwa cha Kiswahili"
+              value={scoreDetails.swahiliTitle}
+              onChange={(event) => updateScoreDetails("swahiliTitle", event.target.value)}
+              className="w-full bg-transparent text-center font-display text-4xl font-semibold outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <input
+              aria-label="Kichwa cha Kiingereza"
+              value={scoreDetails.englishTitle}
+              onChange={(event) => updateScoreDetails("englishTitle", event.target.value)}
+              className="mt-1 w-full bg-transparent text-center text-base text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="mt-3 flex flex-col items-center gap-1 text-sm">
+              <label className="flex items-center gap-2">
+                <span className="text-muted-foreground">Arranged by</span>
+                <input
+                  aria-label="Arranger"
+                  value={scoreDetails.arranger}
+                  onChange={(event) => updateScoreDetails("arranger", event.target.value)}
+                  className="min-w-48 bg-transparent text-center font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </label>
+              <textarea
+                aria-label="Maelezo mengine"
+                value={scoreDetails.details}
+                onChange={(event) => updateScoreDetails("details", event.target.value)}
+                placeholder="Andika maelezo mengine hapa"
+                rows={2}
+                className="w-full resize-none bg-transparent text-center text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+          </section>
           <div ref={container} />
           {activeSyllable !== null && inlinePos && (
             <input
