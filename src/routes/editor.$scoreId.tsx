@@ -308,6 +308,7 @@ function Editor({
     };
   }, [currentXml]);
 
+  openInlineRef.current = (i: number) => openInline(i);
   function openInline(index: number) {
     const node = lyricNodes.current[index];
     const wrap = wrapper.current;
