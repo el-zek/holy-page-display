@@ -346,8 +346,11 @@ function Editor({
               const k = `${syl.partIndex}|${syl.measure}|${syl.voice ?? "1"}`;
               if (!buckets.has(k)) buckets.set(k, []);
               buckets.get(k)!.push(i);
+              const any = `${syl.partIndex}|${syl.measure}|*`;
+              if (!buckets.has(any)) buckets.set(any, []);
+              buckets.get(any)!.push(i);
             });
-            const used = new Map<string, number>();
+            const taken = new Set<number>();
             const lyricEntries: { entry: any; index: number }[] = [];
             osmd.current.GraphicSheet.MeasureList.forEach((row) => {
               row.forEach((measure, staffIdx) => {
@@ -357,9 +360,10 @@ function Editor({
                     const voice = String(entry.GetLyricsEntry?.Parent?.ParentVoice?.VoiceId ?? "1");
                     const k = `${staffIdx}|${measure.MeasureNumber}|${voice}`;
                     const list = buckets.get(k) ?? [];
-                    const n = used.get(k) ?? 0;
-                    used.set(k, n + 1);
-                    const index = list[n];
+                    let index = list.find((i) => !taken.has(i));
+                    if (index === undefined)
+                      index = (buckets.get(`${staffIdx}|${measure.MeasureNumber}|*`) ?? []).find((i) => !taken.has(i));
+                    if (index !== undefined) taken.add(index);
                     if (index !== undefined) lyricEntries.push({ entry, index });
                   });
                 });
