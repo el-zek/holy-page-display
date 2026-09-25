@@ -237,6 +237,65 @@ function Editor({
   const [renderError, setRenderError] = useState<string | null>(null);
   const [activeSyllable, setActiveSyllable] = useState<number | null>(null);
   const warnings = useMemo(() => scoreWarnings(doc), [doc]);
+  const syllablesRef = useRef(syllables);
+  syllablesRef.current = syllables;
+  type Snap = { syllables: Syllable[]; details: ScoreDetails };
+  const undoStack = useRef<Snap[]>([]);
+  const redoStack = useRef<Snap[]>([]);
+  const lastPush = useRef<{ key: string; at: number }>({ key: "", at: 0 });
+  const [, forceHistory] = useState(0);
+  function pushHistory(key: string) {
+    const now = Date.now();
+    if (lastPush.current.key === key && now - lastPush.current.at < 1200) {
+      lastPush.current.at = now;
+      return;
+    }
+    lastPush.current = { key, at: now };
+    undoStack.current.push({ syllables: syllablesRef.current, details: scoreDetails });
+    if (undoStack.current.length > 300) undoStack.current.shift();
+    redoStack.current = [];
+    forceHistory((n) => n + 1);
+  }
+  function restore(snap: Snap) {
+    setSyllables(snap.syllables);
+    setScoreDetails(snap.details);
+    snap.syllables.forEach((syl, i) => {
+      const t = lyricNodes.current[i]?.querySelector("text");
+      if (t && t.textContent !== (syl.text || "lyrics")) t.textContent = syl.text || "lyrics";
+    });
+    const d = parseXml(currentXml);
+    applySyllables(d, snap.syllables);
+    onDraft(serializeXml(d));
+    setDirty(true);
+    lastPush.current = { key: "", at: 0 };
+    forceHistory((n) => n + 1);
+  }
+  function undo() {
+    const snap = undoStack.current.pop();
+    if (!snap) return;
+    redoStack.current.push({ syllables: syllablesRef.current, details: scoreDetails });
+    restore(snap);
+  }
+  function redo() {
+    const snap = redoStack.current.pop();
+    if (!snap) return;
+    undoStack.current.push({ syllables: syllablesRef.current, details: scoreDetails });
+    restore(snap);
+  }
+  const undoRef = useRef(undo);
+  const redoRef = useRef(redo);
+  undoRef.current = undo;
+  redoRef.current = redo;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undoRef.current(); }
+      else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); redoRef.current(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const container = useRef<HTMLDivElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
@@ -262,7 +321,11 @@ function Editor({
         });
       }
       try {
-        await osmd.current.load(currentXml);
+        const loadable = /^\s*<\?xml/.test(currentXml)
+          ? currentXml
+          : '<?xml version="1.0" encoding="UTF-8"?>\n' + currentXml.replace(/^\s+/, "");
+        await osmd.current.load(loadable);
+        if (!cancelled) setRenderError(null);
         if (!cancelled) {
           const rules = osmd.current.EngravingRules;
           rules.PageLeftMargin = 2.8;
@@ -277,17 +340,38 @@ function Editor({
           osmd.current.render();
           requestAnimationFrame(() => {
             if (cancelled || !osmd.current || !container.current) return;
-            const lyricEntries = osmd.current.GraphicSheet.MeasureList
-              .flat()
-              .flatMap((measure) => measure?.staffEntries ?? [])
-              .flatMap((entry) => entry.LyricsEntries ?? []);
+            // Map each drawn lyric to the exact XML syllable (by part + measure + order)
+            const buckets = new Map<string, number[]>();
+            syllablesRef.current.forEach((syl, i) => {
+              const k = `${syl.partIndex}|${syl.measure}`;
+              if (!buckets.has(k)) buckets.set(k, []);
+              buckets.get(k)!.push(i);
+            });
+            const used = new Map<string, number>();
+            const lyricEntries: { entry: any; index: number }[] = [];
+            osmd.current.GraphicSheet.MeasureList.forEach((row) => {
+              row.forEach((measure, staffIdx) => {
+                if (!measure) return;
+                const k = `${staffIdx}|${measure.MeasureNumber}`;
+                const list = buckets.get(k) ?? [];
+                (measure.staffEntries ?? []).forEach((se) => {
+                  (se.LyricsEntries ?? []).forEach((entry) => {
+                    const n = used.get(k) ?? 0;
+                    used.set(k, n + 1);
+                    const index = list[n];
+                    if (index !== undefined) lyricEntries.push({ entry, index });
+                  });
+                });
+              });
+            });
             lyricNodes.current = [];
-            lyricEntries.forEach((entry, index) => {
+            lyricEntries.forEach(({ entry, index }) => {
               const node = entry.GraphicalLabel?.SVGNode as SVGElement | undefined;
               if (!node) return;
               lyricNodes.current[index] = node;
               node.classList.add("editable-score-lyric");
               const textNode = node.querySelector("text");
+              if (textNode) textNode.textContent = syllablesRef.current[index]?.text ?? textNode.textContent;
               if (textNode && !(textNode.textContent ?? "").replace(/\u200b/g, "").trim()) {
                 textNode.textContent = "lyrics";
                 node.classList.add("empty-score-lyric");
@@ -329,13 +413,13 @@ function Editor({
   }
 
   function updateSyllable(index: number, text: string) {
-    setSyllables((prev) => {
-      const next = prev.map((s, i) => (i === index ? { ...s, text } : s));
-      const d = parseXml(currentXml);
-      applySyllables(d, next);
-      onDraft(serializeXml(d));
-      return next;
-    });
+    pushHistory(`syl-${index}`);
+    const next = syllablesRef.current.map((s, i) => (i === index ? { ...s, text } : s));
+    syllablesRef.current = next;
+    setSyllables(next);
+    const d = parseXml(currentXml);
+    applySyllables(d, next);
+    onDraft(serializeXml(d));
     const t = lyricNodes.current[index]?.querySelector("text");
     if (t) t.textContent = text || "lyrics";
     setDirty(true);
@@ -349,6 +433,7 @@ function Editor({
   }
 
   function updateScoreDetails(field: keyof ScoreDetails, value: string) {
+    pushHistory(`det-${field}`);
     setScoreDetails((previous) => ({ ...previous, [field]: value }));
     setDirty(true);
   }
@@ -419,6 +504,12 @@ function Editor({
           <Button variant="ghost" asChild>
             <Link to="/">New upload</Link>
           </Button>
+          <Button variant="outline" onClick={undo} disabled={undoStack.current.length === 0} title="Undo (Ctrl+Z)">
+            ↶ Undo
+          </Button>
+          <Button variant="outline" onClick={redo} disabled={redoStack.current.length === 0} title="Redo (Ctrl+Y)">
+            ↷ Redo
+          </Button>
           <Button variant="outline" onClick={save} disabled={saving}>
             {saving ? "Saving…" : dirty ? "Save" : "Saved"}
           </Button>
@@ -488,8 +579,10 @@ function Editor({
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === "Tab") {
                   e.preventDefault();
-                  const n = activeSyllable + (e.shiftKey ? -1 : 1);
-                  if (n >= 0 && n < lyricNodes.current.length) openInline(n);
+                  const step = e.shiftKey ? -1 : 1;
+                  let n = activeSyllable + step;
+                  while (n >= 0 && n < syllables.length && !lyricNodes.current[n]) n += step;
+                  if (n >= 0 && n < syllables.length) openInline(n);
                   else setActiveSyllable(null);
                 } else if (e.key === "Escape") setActiveSyllable(null);
               }}
