@@ -6,6 +6,7 @@ export type Syllable = {
   measure: string;
   text: string;
   syllabic: string;
+  voice?: string;
 };
 
 export type ScoreDetails = {

@@ -372,6 +372,7 @@ function Editor({
               lyricNodes.current[index] = node;
               node.classList.add("editable-score-lyric");
               const textNode = node.querySelector("text");
+              if (textNode && (textNode.textContent ?? "") !== (syllablesRef.current[index]?.text ?? "")) (window as any).__lyricMismatch = ((window as any).__lyricMismatch ?? 0) + 1;
               if (textNode) textNode.textContent = syllablesRef.current[index]?.text ?? textNode.textContent;
               if (textNode && !(textNode.textContent ?? "").replace(/\u200b/g, "").trim()) {
                 textNode.textContent = "lyrics";
