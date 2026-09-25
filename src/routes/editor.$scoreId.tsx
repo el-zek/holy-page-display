@@ -343,7 +343,7 @@ function Editor({
             // Map each drawn lyric to the exact XML syllable (by part + measure + order)
             const buckets = new Map<string, number[]>();
             syllablesRef.current.forEach((syl, i) => {
-              const k = `${syl.partIndex}|${syl.measure}`;
+              const k = `${syl.partIndex}|${syl.measure}|${syl.voice ?? "1"}`;
               if (!buckets.has(k)) buckets.set(k, []);
               buckets.get(k)!.push(i);
             });
@@ -352,10 +352,11 @@ function Editor({
             osmd.current.GraphicSheet.MeasureList.forEach((row) => {
               row.forEach((measure, staffIdx) => {
                 if (!measure) return;
-                const k = `${staffIdx}|${measure.MeasureNumber}`;
-                const list = buckets.get(k) ?? [];
                 (measure.staffEntries ?? []).forEach((se) => {
-                  (se.LyricsEntries ?? []).forEach((entry) => {
+                  (se.LyricsEntries ?? []).forEach((entry: any) => {
+                    const voice = String(entry.GetLyricsEntry?.Parent?.ParentVoice?.VoiceId ?? "1");
+                    const k = `${staffIdx}|${measure.MeasureNumber}|${voice}`;
+                    const list = buckets.get(k) ?? [];
                     const n = used.get(k) ?? 0;
                     used.set(k, n + 1);
                     const index = list[n];

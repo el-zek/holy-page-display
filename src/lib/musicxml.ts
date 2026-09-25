@@ -50,6 +50,7 @@ export function collectSyllables(doc: Document): Syllable[] {
           measure: measureNo,
           text: textEl.textContent ?? "",
           syllabic: lyric.getElementsByTagName("syllabic")[0]?.textContent ?? "single",
+          voice: lyric.parentElement?.getElementsByTagName("voice")[0]?.textContent?.trim() || "1",
         });
       });
     });
