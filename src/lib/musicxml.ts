@@ -6,6 +6,7 @@ export type Syllable = {
   measure: string;
   text: string;
   syllabic: string;
+  voice?: string;
 };
 
 export type ScoreDetails = {
@@ -50,6 +51,7 @@ export function collectSyllables(doc: Document): Syllable[] {
           measure: measureNo,
           text: textEl.textContent ?? "",
           syllabic: lyric.getElementsByTagName("syllabic")[0]?.textContent ?? "single",
+          voice: lyric.parentElement?.getElementsByTagName("voice")[0]?.textContent?.trim() || "1",
         });
       });
     });
